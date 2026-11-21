@@ -3,9 +3,14 @@ name: Florida
 permissions:
   contents: write
 
+env:
+  # 补丁是按这个 frida 版本生成的，改版本必须重新生成 patches/
+  FRIDA_VERSION: "17.17.0"
+
 on:
-  schedule:
-    - cron: "0 9/12 * * *"
+  # 版本已钉死，定时任务只会重复构建同一版本，先关掉
+  # schedule:
+  #   - cron: "0 9/12 * * *"
   workflow_dispatch:
   push:
     branches: ["main", "ci"]
@@ -21,20 +26,9 @@ jobs:
       FRIDA_VERSION: ${{ steps.pullFridaLatestRelease.outputs.FRIDA_VERSION }}
       ALREADY_RELEASE: ${{ steps.checkReleaseVersion.outputs.ALREADY_RELEASE }}
     steps:
-      - name: Pull Frida Latest Release
+      - name: Set Frida Version
         id: pullFridaLatestRelease
-        uses: actions/github-script@v3
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const releaseResponse = await github.repos.getLatestRelease({
-              owner: 'frida',
-              repo: 'frida',
-            })
-            const {
-              data: { tag_name: ver }
-            } = releaseResponse;
-            core.setOutput('FRIDA_VERSION', ver);
+        run: echo "FRIDA_VERSION=${{ env.FRIDA_VERSION }}" >> "$GITHUB_OUTPUT"
 
       - name: Split Repository Name
         id: split_name
@@ -115,7 +109,7 @@ jobs:
         node-version: 18
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v5
       with:
         distribution: "temurin"
         java-version: "17"
@@ -148,7 +142,7 @@ jobs:
         export ANDROID_NDK_ROOT=${{ steps.setup-ndk.outputs.ndk-path }}
         echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
         
-        git clone --recurse-submodules https://github.com/frida/frida
+        git clone --recurse-submodules --branch "${{ needs.check_version.outputs.FRIDA_VERSION }}" https://github.com/frida/frida
         cd frida
         for path in ../patches/*
         do
